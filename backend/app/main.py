@@ -13,6 +13,7 @@ from .video_discovery import parse_youtube_id
 from fastapi import Request
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+from functools import lru_cache
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -47,7 +48,7 @@ class CollectionIn(BaseModel):
 
 @app.get('/health')
 def health():
-    return {'status': 'ok'}
+    return {'status': 'ok', 'video_discovery_configured': bool(os.getenv('YOUTUBE_API_KEY')), 'database': 'sqlite' if engine.dialect.name == 'sqlite' else 'postgresql'}
 
 @app.get('/api/moments', response_model=list[MomentOut])
 def list_moments(db: DB, q: str = Query('', max_length=120), category: str | None = None, limit: int = Query(50, ge=1, le=100), offset: int = Query(0, ge=0)):
@@ -135,7 +136,7 @@ def discover_video_previews(request: Request, anime: str = Query(..., min_length
             raise HTTPException(429, 'Please wait 30 seconds before another video search')
         _submit_times[key] = now
     if not os.getenv('YOUTUBE_API_KEY'):
-        raise HTTPException(503, 'Video discovery is not configured')
+        raise HTTPException(503, 'YouTube API key missing from the running Render service. Set YOUTUBE_API_KEY in hypeframe-api Environment and redeploy.')
     try:
         return {'results': discover_candidates(anime, moment, limit), 'reviewed': False}
     except (HTTPError, URLError, TimeoutError, ValueError) as exc:
