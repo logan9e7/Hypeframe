@@ -111,3 +111,9 @@ pytest -q
 ```
 
 These commands should be run in CI for the new auth release; the latest auth build and browser email sign-in have not been independently verified here.
+
+## YouTube clip previews (new)
+
+The moment cards now include a **FIND CLIPS** button. It requests `GET /api/videos/discover?anime=...&moment=...&limit=3` from the Render backend. Render must have `YOUTUBE_API_KEY` configured. Search results are public, embeddable YouTube videos shown only after a visitor explicitly searches; clicking **PLAY** opens the YouTube privacy-enhanced embed. Search previews are **not moderator-approved or licensed by Hypeframe**. Hypeframe does not download, copy, or host footage. The YouTube API can return unrelated, unofficial, or unlicensed uploads; users should verify channels and permissions. This is **not** a curated, preapproved video library.
+
+Netlify must have `NEXT_PUBLIC_API_URL=https://hypeframe-api.onrender.com`. Both Render and Netlify must deploy the latest GitHub commit before the feature is live. Render must allow `https://hypeframe-web.netlify.app` in `CORS_ORIGINS` if that environment variable is explicitly configured. Search requests are rate-limited to one per IP per 30 seconds per backend instance, to conserve YouTube API quota.
