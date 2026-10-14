@@ -8,9 +8,9 @@ export default function ClipPreview({anime,moment}:{anime:string;moment:string})
   setBusy(true);setError('');setLoaded(false);
   try{const api=process.env.NEXT_PUBLIC_API_URL;if(!api)throw new Error('Video API is not configured');
    const query=new URLSearchParams({anime,moment,limit:'3'});
-   const response=await fetch(api.replace(/\/$/,'')+'/api/videos/discover?'+query);
+   const response=await fetch(api.replace(/\/$/,'')+'/api/videos/discover?'+query,{cache:'no-store'});
    const body=await response.json();
-   if(!response.ok)throw new Error(typeof body.detail==='string'?body.detail:'Video search unavailable');
+   if(!response.ok)throw new Error(response.status===503?'Video discovery is not configured on the running backend. Check Render YOUTUBE_API_KEY and deployment.':typeof body.detail==='string'?body.detail:'Video search unavailable');
    setVideos(Array.isArray(body.results)?body.results:[]);setLoaded(true);
   }catch(e){setError(e instanceof Error?e.message:'Video search unavailable')}finally{setBusy(false)}
  }
