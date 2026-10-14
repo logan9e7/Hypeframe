@@ -1,0 +1,21 @@
+name: Production smoke monitor
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 15 --max-time 75 https://hypeframe-web.netlify.app/ -o /tmp/hypeframe.html
+          grep -qi 'HYPEFRAME' /tmp/hypeframe.html
+          curl --fail --silent --show-error --retry 3 --retry-delay 15 --max-time 75 https://hypeframe-api.onrender.com/health -o /tmp/health.json
+          python3 -c "import json; d=json.load(open('/tmp/health.json')); assert d['status']=='ok'"
+          curl --fail --silent --show-error --retry 3 --retry-delay 15 --max-time 75 https://hypeframe-api.onrender.com/api/moments -o /tmp/moments.json
+          python3 -c "import json; assert isinstance(json.load(open('/tmp/moments.json')),list)"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"moment_id":"gear-five","url":"https://youtu.be/dQw4w9WgXcQ"}' https://hypeframe-api.onrender.com/api/video-submissions)" = 410
