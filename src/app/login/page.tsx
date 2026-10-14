@@ -5,7 +5,7 @@ import {getSupabase} from '@/lib/supabase';
 export default function Login(){
  const [email,setEmail]=useState('');const [status,setStatus]=useState('');const [busy,setBusy]=useState(false);
  async function login(e:React.FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setStatus('');
-  try{const {error}=await getSupabase().auth.signInWithOtp({email,emailRedirectTo:window.location.origin+'/auth/callback'});if(error)throw error;setStatus('Check your email for a secure sign-in link.')}
+  try{const {error}=await getSupabase().auth.signInWithOtp({email,options:{emailRedirectTo:window.location.origin+'/auth/callback'}});if(error)throw error;setStatus('Check your email for a secure sign-in link.')}
   catch(err){setStatus(err instanceof Error?err.message:'Unable to send login link')}
   finally{setBusy(false)}
  }
