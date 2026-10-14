@@ -141,3 +141,34 @@ def discover_video_previews(request: Request, anime: str = Query(..., min_length
         return {'results': discover_candidates(anime, moment, limit), 'reviewed': False}
     except (HTTPError, URLError, TimeoutError, ValueError) as exc:
         raise HTTPException(502, 'YouTube video discovery is temporarily unavailable') from exc
+
+
+# One featured discovery pass per process per day, to preserve free YouTube API quota.
+# These are search previews, NOT moderator-approved or licensed clips.
+_featured_cache = {'at': None, 'results': []}
+_featured_lock = Lock()
+
+@app.get('/api/videos/featured')
+def featured_video_previews(limit: int = Query(12, ge=1, le=12)):
+    from .video_discovery import discover_candidates
+    from .seed import SEED
+    from urllib.error import HTTPError, URLError
+    if not os.getenv('YOUTUBE_API_KEY'):
+        raise HTTPException(503, 'YouTube API key not configured')
+    now = datetime.now(timezone.utc)
+    with _featured_lock:
+        previous = _featured_cache['at']
+        if previous and now - previous < timedelta(hours=24):
+            return {'results': _featured_cache['results'][:limit], 'reviewed': False, 'curator': 'Hypeframe Curator'}
+        _featured_cache['at'] = now
+        results = []
+        for entry in SEED[:12]:
+            moment_id, anime, title = entry[:3]
+            try:
+                candidates = discover_candidates(anime, title, 3)
+                if candidates:
+                    results.append({'moment_id': moment_id, **candidates[0]})
+            except (HTTPError, URLError, TimeoutError, ValueError):
+                continue
+        _featured_cache['results'] = results
+        return {'results': results[:limit], 'reviewed': False, 'curator': 'Hypeframe Curator'}
