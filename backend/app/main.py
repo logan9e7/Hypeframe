@@ -13,6 +13,9 @@ from .video_discovery import parse_youtube_id
 from fastapi import Request
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+import json
+import logging
+from pathlib import Path
 from functools import lru_cache
 
 @asynccontextmanager
@@ -127,10 +130,22 @@ def discover_video_previews(request: Request, anime: str = Query(..., min_length
         raise HTTPException(502, 'YouTube video discovery is temporarily unavailable') from exc
 
 
-# One featured discovery pass per process per day, to preserve free YouTube API quota.
-# These are search previews, NOT moderator-approved or licensed clips.
+# Quota-safe discovery: one pass per 24 hours, persisted on the service filesystem.
+# For multiple instances or ephemeral restarts, replace with a shared durable cache.
 _featured_cache = {'at': None, 'results': []}
 _featured_lock = Lock()
+_featured_path = Path(os.getenv('FEATURED_CACHE_PATH', '/tmp/hypeframe-featured-cache.json'))
+_featured_budget = 12
+
+def _load_featured():
+    try:
+        data = json.loads(_featured_path.read_text())
+        refreshed = datetime.fromisoformat(data['at'])
+        if refreshed.tzinfo and datetime.now(timezone.utc) - refreshed < timedelta(hours=24):
+            return data['results']
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
 
 @app.get('/api/videos/featured')
 def featured_video_previews(limit: int = Query(12, ge=1, le=12)):
@@ -144,15 +159,27 @@ def featured_video_previews(limit: int = Query(12, ge=1, le=12)):
         previous = _featured_cache['at']
         if previous and now - previous < timedelta(hours=24):
             return {'results': _featured_cache['results'][:limit], 'reviewed': False, 'curator': 'Hypeframe Curator'}
-        _featured_cache['at'] = now
+        stored = _load_featured()
+        if stored is not None:
+            _featured_cache.update(at=now,results=stored)
+            return {'results': stored[:limit], 'reviewed': False, 'curator': 'Hypeframe Curator'}
         results = []
-        for entry in SEED[:12]:
+        # Search API consumes 100 quota units per moment. Never exceed 12 searches per refresh.
+        for entry in SEED[:_featured_budget]:
             moment_id, anime, title = entry[:3]
             try:
                 candidates = discover_candidates(anime, title, 3)
                 if candidates:
                     results.append({'moment_id': moment_id, **candidates[0]})
-            except (HTTPError, URLError, TimeoutError, ValueError):
+            except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+                logging.warning('YouTube discovery failed for moment %s: %s', moment_id, type(exc).__name__)
                 continue
-        _featured_cache['results'] = results
+        _featured_cache.update(at=now,results=results)
+        try:
+            _featured_path.parent.mkdir(parents=True,exist_ok=True)
+            temp = _featured_path.with_suffix('.tmp')
+            temp.write_text(json.dumps({'at':now.isoformat(),'results':results}))
+            temp.replace(_featured_path)
+        except OSError:
+            logging.warning('Featured video cache could not be persisted')
         return {'results': results[:limit], 'reviewed': False, 'curator': 'Hypeframe Curator'}
