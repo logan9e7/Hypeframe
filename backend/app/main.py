@@ -101,3 +101,19 @@ def submit_video(payload: VideoSubmissionIn, request: Request, db: DB):
     db.add(VideoSubmission(moment_id=payload.moment_id, video_id=video_id))
     db.commit()
     return {'status': 'pending_review', 'message': 'Link received for review'}
+
+
+@app.get('/api/anime/search')
+def search_anime(request: Request, q: str = Query(..., min_length=2, max_length=100), provider: str = Query('all', pattern='^(all|jikan|anilist|kitsu)$'), limit: int = Query(5, ge=1, le=10)):
+    """Read-only catalog search, cached for a day; never returns hosted anime video."""
+    from .providers import search_metadata
+    # Limit unique requests per IP to avoid turning the API into an unbounded free-provider proxy.
+    client_ip = request.client.host if request.client else 'unknown'
+    now = datetime.now(timezone.utc)
+    key = 'anime:' + client_ip
+    with _submit_lock:
+        previous = _submit_times.get(key)
+        if previous and now - previous < timedelta(seconds=10):
+            raise HTTPException(429, 'Please wait before searching again')
+        _submit_times[key] = now
+    return search_metadata(q, provider, limit)
