@@ -119,3 +119,24 @@ def search_anime(request: Request, q: str = Query(..., min_length=2, max_length=
             raise HTTPException(429, 'Please wait before searching again')
         _submit_times[key] = now
     return search_metadata(q, provider, limit)
+
+
+@app.get('/api/videos/discover')
+def discover_video_previews(request: Request, anime: str = Query(..., min_length=2, max_length=100), moment: str = Query(..., min_length=2, max_length=150), limit: int = Query(3, ge=1, le=5)):
+    """Search public embeddable YouTube videos. Search previews are NOT moderator-approved or licensed by Hypeframe."""
+    from .video_discovery import discover_candidates
+    from urllib.error import HTTPError, URLError
+    client_ip = request.client.host if request.client else 'unknown'
+    key = 'video:' + client_ip
+    now = datetime.now(timezone.utc)
+    with _submit_lock:
+        previous = _submit_times.get(key)
+        if previous and now - previous < timedelta(seconds=30):
+            raise HTTPException(429, 'Please wait 30 seconds before another video search')
+        _submit_times[key] = now
+    if not os.getenv('YOUTUBE_API_KEY'):
+        raise HTTPException(503, 'Video discovery is not configured')
+    try:
+        return {'results': discover_candidates(anime, moment, limit), 'reviewed': False}
+    except (HTTPError, URLError, TimeoutError, ValueError) as exc:
+        raise HTTPException(502, 'YouTube video discovery is temporarily unavailable') from exc
