@@ -17,6 +17,8 @@ from threading import Lock
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)  # MVP only; replace with Alembic migrations before production
+    from .seed import seed
+    seed()  # Render free filesystem is ephemeral; seed runtime DB, not only build instance
     yield
 
 app = FastAPI(title='Hypeframe API', version='0.1.0', lifespan=lifespan)
