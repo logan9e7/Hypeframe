@@ -84,26 +84,10 @@ class VideoSubmissionIn(BaseModel):
 _submit_times: dict[str, datetime] = {}
 _submit_lock = Lock()
 
-@app.post('/api/video-submissions', status_code=202)
-def submit_video(payload: VideoSubmissionIn, request: Request, db: DB):
-    video_id = parse_youtube_id(payload.url)
-    if not video_id:
-        raise HTTPException(422, 'Only valid YouTube video links are accepted')
-    if not db.get(Moment, payload.moment_id):
-        raise HTTPException(404, 'Moment not found')
-    client_ip = request.client.host if request.client else 'unknown'
-    now = datetime.now(timezone.utc)
-    with _submit_lock:
-        previous = _submit_times.get(client_ip)
-        if previous and now - previous < timedelta(minutes=2):
-            raise HTTPException(429, 'Please wait before submitting another link')
-        _submit_times[client_ip] = now
-    existing = db.scalar(select(VideoSubmission).where(VideoSubmission.moment_id == payload.moment_id, VideoSubmission.video_id == video_id))
-    if existing:
-        return {'status': 'pending_review', 'message': 'Link received for review'}
-    db.add(VideoSubmission(moment_id=payload.moment_id, video_id=video_id))
-    db.commit()
-    return {'status': 'pending_review', 'message': 'Link received for review'}
+# Legacy anonymous write endpoint disabled: submissions require Supabase Auth + RLS.
+@app.post('/api/video-submissions', status_code=410)
+def legacy_video_submission():
+    raise HTTPException(410, 'Use authenticated Supabase video submissions at /submit')
 
 
 @app.get('/api/anime/search')
