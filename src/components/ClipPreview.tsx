@@ -1,9 +1,12 @@
 'use client';
-import {useState} from 'react';
+import {useEffect,useState} from 'react';
 type Video={video_id:string;title:string;channel:string;status:string};
-export default function ClipPreview({anime,moment}:{anime:string;moment:string}){
+export default function ClipPreview({anime,moment,auto=false}:{anime:string;moment:string;auto?:boolean}){
  const [videos,setVideos]=useState<Video[]>([]);const [active,setActive]=useState<string|null>(null);
  const [error,setError]=useState('');const [busy,setBusy]=useState(false);const [loaded,setLoaded]=useState(false);
+ useEffect(()=>{if(auto)void discover(); // Only one featured card auto-searches; other cards are on-demand to conserve free API quota.
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[auto,anime,moment]);
  async function discover(){
   setBusy(true);setError('');setLoaded(false);
   try{const api=process.env.NEXT_PUBLIC_API_URL;if(!api)throw new Error('Video API is not configured');
@@ -15,7 +18,7 @@ export default function ClipPreview({anime,moment}:{anime:string;moment:string})
   }catch(e){setError(e instanceof Error?e.message:'Video search unavailable')}finally{setBusy(false)}
  }
  return <div style={{marginTop:12}}>
-  <button type="button" onClick={discover} disabled={busy} style={{padding:'9px 13px',background:'#f26443',color:'#08090d',border:0,borderRadius:4,cursor:'pointer',fontWeight:700}}>{busy?'SEARCHING…':'▶ FIND CLIPS'}</button>
+  <button type="button" onClick={discover} disabled={busy} style={{padding:'9px 13px',background:'#f26443',color:'#08090d',border:0,borderRadius:4,cursor:'pointer',fontWeight:700}}>{busy?'SEARCHING…':loaded?'↻ REFRESH CLIPS':'▶ FIND CLIPS'}</button>
   {error&&<p role="alert" style={{color:'#f4b1a2',fontSize:12}}>{error}</p>}
   {loaded&&videos.length===0&&<p style={{fontSize:12}}>No embeddable YouTube videos found for this moment.</p>}
   {videos.length>0&&<div style={{display:'grid',gap:9,marginTop:12}}>
