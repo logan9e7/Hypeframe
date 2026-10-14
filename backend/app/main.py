@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title='Hypeframe API', version='0.1.0', lifespan=lifespan)
-origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+origins = os.getenv('CORS_ORIGINS', 'http://localhost:3000,https://hypeframe-web.netlify.app').split(',')
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=['GET', 'POST', 'DELETE'], allow_headers=['*'])
 
 def db_session():
